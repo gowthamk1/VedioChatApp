@@ -1,0 +1,26 @@
+{
+  "name": "webrtc-videochat-server",
+  "version": "1.0.0",
+  "description": "WebRTC signaling server using Socket.IO",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "pg": "^8.15.6",
+    "postgres": "^3.4.5",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.7.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  },
+  "keywords": [],
+  "type": "commonjs"
+}
