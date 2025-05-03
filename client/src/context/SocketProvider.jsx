@@ -10,8 +10,8 @@ export const useSocket = () => {
 export const SocketProvider = ({ children }) => {
   const socket = useMemo(() => {
     const socketInstance = io("http://localhost:8000", {
-      transports: ["websocket"],          // Force WebSocket transport
-      reconnectionAttempts: 5,            // Try reconnecting up to 5 times
+      transports: ["websocket"],        
+      reconnectionAttempts: 5,           
     });
 
     socketInstance.on("connect", () => {
@@ -29,11 +29,8 @@ export const SocketProvider = ({ children }) => {
     return socketInstance;
   }, []);
 
-  // Optional: Cleanup on full app unmount (rare in SPAs)
   useEffect(() => {
     return () => {
-      // Commented out to avoid disconnects on page transitions
-      // socket.disconnect();
       console.log("ℹ️ SocketProvider unmounted");
     };
   }, []);

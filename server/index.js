@@ -3,7 +3,7 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
-const pool = require("./db"); // ✅ Import the PostgreSQL pool
+const pool = require("./db"); 
 
 const app = express();
 const server = http.createServer(app);

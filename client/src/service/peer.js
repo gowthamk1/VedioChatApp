@@ -23,9 +23,6 @@ class PeerService {
     };
   }
 
-  /**
-   * Call this when starting a new connection (e.g., user joins/rejoins a room).
-   */
   resetPeer() {
     if (this.peer) {
       try {
