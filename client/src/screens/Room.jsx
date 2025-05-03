@@ -20,6 +20,11 @@ const RoomPage = () => {
   const [incomingCall, setIncomingCall] = useState(false);
   const [callerInfo, setCallerInfo] = useState(null);
 
+  const [cameraOn, setCameraOn] = useState(true);
+  const [micOn, setMicOn] = useState(true);
+  const [remoteCameraOn, setRemoteCameraOn] = useState(true);
+  const [remoteSpeakerOn, setRemoteSpeakerOn] = useState(true);
+
   useEffect(() => {
     socket.emit("room:join", { email, room: roomId });
 
@@ -29,7 +34,7 @@ const RoomPage = () => {
     };
     getMedia();
 
-    peer.resetPeer(); // 🔄 Reset peer connection on entering room
+    peer.resetPeer();
   }, [roomId, socket, email]);
 
   const handleUserJoined = useCallback(({ id }) => {
@@ -118,6 +123,7 @@ const RoomPage = () => {
     peer.getCurrentPeer().close();
     setCallActive(false);
     setCallEnded(true);
+    setMessages([]); 
     socket.emit("end-call", { to: remoteSocketId });
   };
 
@@ -128,12 +134,56 @@ const RoomPage = () => {
     setRemoteStream(null);
     setCallActive(false);
     setCallEnded(true);
+    setMessages([]); 
+    setRemoteSocketId(null);
   }, [remoteStream]);
 
+  const toggleCamera = () => {
+    if (!myStream) return;
+    const videoTrack = myStream.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !cameraOn;
+      setCameraOn(!cameraOn);
+      socket.emit("camera-toggle", { to: remoteSocketId, on: !cameraOn, from: socket.id });
+    }
+  };
+
+  const toggleMic = () => {
+    if (!myStream) return;
+    const audioTrack = myStream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !micOn;
+      setMicOn(!micOn);
+    }
+  };
+
+  const toggleRemoteSpeaker = () => {
+    setRemoteSpeakerOn(prev => !prev);
+    if (remoteStream) {
+      remoteStream.getAudioTracks().forEach(track => {
+        track.enabled = !remoteSpeakerOn;
+      });
+    }
+  };
+
+  const handleRemoteCameraToggle = useCallback(({ on, from }) => {
+    if (from !== socket.id) {
+      setRemoteCameraOn(on);
+    }
+  }, [socket.id]);
+
   useEffect(() => {
-    peer.getCurrentPeer().addEventListener("track", (ev) => {
+    const peerConnection = peer.getCurrentPeer();
+
+    const handleTrack = (ev) => {
       setRemoteStream(ev.streams[0]);
-    });
+    };
+
+    peerConnection.addEventListener("track", handleTrack);
+
+    return () => {
+      peerConnection.removeEventListener("track", handleTrack);
+    };
   }, []);
 
   useEffect(() => {
@@ -145,6 +195,7 @@ const RoomPage = () => {
     socket.on("ice-candidate", handleNewIceCandidateMsg);
     socket.on("text-message", handleReceiveMessage);
     socket.on("call-ended", handleRemoteEndCall);
+    socket.on("camera-toggle", handleRemoteCameraToggle);
 
     return () => {
       socket.off("user:joined", handleUserJoined);
@@ -155,6 +206,7 @@ const RoomPage = () => {
       socket.off("ice-candidate", handleNewIceCandidateMsg);
       socket.off("text-message", handleReceiveMessage);
       socket.off("call-ended", handleRemoteEndCall);
+      socket.off("camera-toggle", handleRemoteCameraToggle);
     };
   }, [
     socket,
@@ -165,7 +217,8 @@ const RoomPage = () => {
     handleNegoNeedFinal,
     handleNewIceCandidateMsg,
     handleReceiveMessage,
-    handleRemoteEndCall
+    handleRemoteEndCall,
+    handleRemoteCameraToggle,
   ]);
 
   useEffect(() => {
@@ -182,7 +235,7 @@ const RoomPage = () => {
   return (
     <div>
       <h1>Room: {roomId}</h1>
-      <h4>{remoteSocketId ? "Connected" : "Waiting for peer..."}</h4>
+      {callEnded ? <h4>Call ended</h4> : <h4>{remoteSocketId ? "Connected" : "Waiting for peer..."}</h4>}
 
       {incomingCall && (
         <div>
@@ -192,53 +245,80 @@ const RoomPage = () => {
         </div>
       )}
 
-      {!callActive && !incomingCall && remoteSocketId && myStream && (
+      {!callActive && !incomingCall && remoteSocketId && myStream && !callEnded && (
         <button onClick={handleCallUser}>Call</button>
       )}
 
       {callActive && <button onClick={handleEndCall}>End Call</button>}
       {callEnded && <button onClick={() => navigate("/")}>Home</button>}
 
-      {myStream && (
-        <div>
-          <h3>My Stream</h3>
-          <ReactPlayer playing muted height="200px" width="300px" url={myStream} />
-        </div>
-      )}
-
-      {remoteStream && (
-        <div>
-          <h3>Remote Stream</h3>
-          <ReactPlayer playing height="200px" width="300px" url={remoteStream} />
-        </div>
-      )}
-
-      <div style={{ marginTop: "20px", padding: "10px", border: "1px solid #ccc" }}>
-        <h3>Chat</h3>
-        <div style={{ height: "200px", overflowY: "auto", marginBottom: "10px" }}>
-          {messages.map((msg, i) => (
-            <div key={i} style={{ textAlign: msg.fromSelf ? "right" : "left" }}>
-              <span style={{
-                background: msg.fromSelf ? "#DCF8C6" : "#F1F0F0",
-                padding: "5px 10px",
-                borderRadius: "10px",
-                display: "inline-block",
-                marginBottom: "4px"
-              }}>
-                {!msg.fromSelf && msg.sender ? <strong>{msg.sender}: </strong> : null}
-                {msg.message}
-              </span>
+      <div style={{ display: "flex", gap: "20px", marginTop: "20px" }}>
+        {myStream && (
+          <div style={{ position: "relative" }}>
+            <h3>My Stream</h3>
+            {cameraOn ? (
+              <ReactPlayer playing muted height="200px" width="300px" url={myStream} />
+            ) : (
+              <div style={{ width: "300px", height: "200px", backgroundColor: "#000" }} />
+            )}
+            <div style={{ position: "absolute", bottom: 5, left: 5 }}>
+              <button onClick={toggleCamera}>{cameraOn ? "Hide Camera" : "Show Camera"}</button>
+              <button onClick={toggleMic}>{micOn ? "Mute Mic" : "Unmute Mic"}</button>
             </div>
-          ))}
-        </div>
-        <input
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          type="text"
-          placeholder="Type a message"
-        />
-        <button onClick={handleSendMessage}>Send</button>
+          </div>
+        )}
+
+        {remoteStream && (
+          <div style={{ position: "relative" }}>
+            <h3>Remote Stream</h3>
+            {remoteCameraOn ? (
+              <ReactPlayer
+                playing
+                muted={!remoteSpeakerOn}
+                height="200px"
+                width="300px"
+                url={remoteStream}
+              />
+            ) : (
+              <div style={{ width: "300px", height: "200px", backgroundColor: "#000" }} />
+            )}
+            <div style={{ position: "absolute", bottom: 5, left: 5 }}>
+              <button onClick={toggleRemoteSpeaker}>
+                {remoteSpeakerOn ? "Mute Speaker" : "Unmute Speaker"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {callActive && (
+        <div style={{ marginTop: "20px", padding: "10px", border: "1px solid #ccc" }}>
+          <h3>Chat</h3>
+          <div style={{ height: "200px", overflowY: "auto", marginBottom: "10px" }}>
+            {messages.map((msg, i) => (
+              <div key={i} style={{ textAlign: msg.fromSelf ? "right" : "left" }}>
+                <span style={{
+                  background: msg.fromSelf ? "#DCF8C6" : "#F1F0F0",
+                  padding: "5px 10px",
+                  borderRadius: "10px",
+                  display: "inline-block",
+                  marginBottom: "4px"
+                }}>
+                  {!msg.fromSelf && msg.sender ? <strong>{msg.sender}: </strong> : null}
+                  {msg.message}
+                </span>
+              </div>
+            ))}
+          </div>
+          <input
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            type="text"
+            placeholder="Type a message"
+          />
+          <button onClick={handleSendMessage}>Send</button>
+        </div>
+      )}
     </div>
   );
 };
