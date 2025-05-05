@@ -75,11 +75,6 @@ const RoomPage = () => {
     peer.setRemoteDescription(ans);
   }, []);
 
-  // const handleNegoNeeded = useCallback(async () => {
-  //   const offer = await peer.getOffer();
-  //   socket.emit("peer:nego:needed", { offer, to: remoteSocketId });
-  // }, [remoteSocketId, socket]);
-
   const handleNegoNeedIncoming = useCallback(async ({ from, offer }) => {
     const ans = await peer.getAnswer(offer);
     socket.emit("peer:nego:done", { to: from, ans });
@@ -324,3 +319,4 @@ const RoomPage = () => {
 };
 
 export default RoomPage;
+//1
