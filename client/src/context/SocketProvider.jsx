@@ -9,7 +9,7 @@ export const useSocket = () => {
 
 export const SocketProvider = ({ children }) => {
   const socket = useMemo(() => {
-    const socketInstance = io("http://localhost:8000", {
+    const socketInstance = io("https://vediochatapp-server-fb3a15c736f5.herokuapp.com", {
       transports: ["websocket"],        
       reconnectionAttempts: 5,           
     });

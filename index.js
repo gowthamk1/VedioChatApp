@@ -8,14 +8,21 @@ const pool = require("./db");
 const app = express();
 const server = http.createServer(app);
 
+
+const corsOptions = {
+  origin: process.env.CLIENT_URL || "https://vediochatapplication.netlify.app/", 
+  methods: ["GET", "POST"],
+  credentials: true, // Optional, based on your needs
+};
+
+app.use(cors(corsOptions));
+
 const io = new Server(server, {
   cors: {
-    origin: "*", // Change this in production
+    origin: process.env.CLIENT_URL || "https://vediochatapplication.netlify.app/", 
     methods: ["GET", "POST"],
   },
 });
-
-app.use(cors());
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
@@ -55,7 +62,6 @@ io.on("connection", (socket) => {
     socket.to(to).emit("ice-candidate", { candidate });
   });
 
-
   socket.on("text-message", async ({ room, message, sender }) => {
     try {
       await pool.query(
@@ -82,6 +88,7 @@ io.on("connection", (socket) => {
   });
 });
 
+// Use the port from the environment variable in production
 const PORT = process.env.PORT || 8000;
 server.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
