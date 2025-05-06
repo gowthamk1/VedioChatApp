@@ -1,92 +1,94 @@
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const cors = require('cors');
-const { Server } = require('socket.io');
-const { Pool } = require("pg");
+require("dotenv").config();
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const cors = require("cors");
+const pool = require("./db"); 
 
 const app = express();
-app.use(cors());
-
 const server = http.createServer(app);
+
+
+const corsOptions = {
+  origin: process.env.CLIENT_URL || "https://vediochatapplication.netlify.app/", 
+  methods: ["GET", "POST"],
+  credentials: true, 
+};
+
+app.use(cors(corsOptions));
+
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
+    origin: process.env.CLIENT_URL || "https://vediochatapplication.netlify.app/", 
+    methods: ["GET", "POST"],
   },
 });
 
-// PostgreSQL connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
-
 io.on("connection", (socket) => {
-  console.log("🟢 User connected:", socket.id);
+  console.log("User connected:", socket.id);
 
-  // Join room
   socket.on("room:join", ({ email, room }) => {
     socket.join(room);
-    console.log(`👤 ${email} joined room: ${room}`);
-    socket.to(room).emit("user:joined", { id: socket.id });
+    console.log(`${email} joined room ${room}`);
+
+    const clients = Array.from(io.sockets.adapter.rooms.get(room) || []);
+    const otherClients = clients.filter((id) => id !== socket.id);
+
+    if (otherClients.length > 0) {
+      otherClients.forEach((clientId) => {
+        socket.to(clientId).emit("user:joined", { id: socket.id });
+      });
+      otherClients.forEach((clientId) => {
+        socket.emit("user:joined", { id: clientId });
+      });
+    }
+
+    socket.emit("room:join", { email, room });
   });
 
-  // Call events
   socket.on("user:call", ({ to, offer }) => {
-    console.log(`📞 Call offer from ${socket.id} to ${to}`);
-    io.to(to).emit("incomming:call", { from: socket.id, offer });
+    socket.to(to).emit("incomming:call", { from: socket.id, offer });
   });
 
   socket.on("call:accepted", ({ to, ans }) => {
-    io.to(to).emit("call:accepted", { ans });
+    socket.to(to).emit("call:accepted", { ans });
   });
 
-  // Negotiation
   socket.on("peer:nego:needed", ({ to, offer }) => {
-    io.to(to).emit("peer:nego:needed", { from: socket.id, offer });
+    socket.to(to).emit("peer:nego:needed", { from: socket.id, offer });
   });
 
   socket.on("peer:nego:done", ({ to, ans }) => {
-    io.to(to).emit("peer:nego:final", { ans });
+    socket.to(to).emit("peer:nego:final", { ans });
   });
 
-  // ICE candidate
   socket.on("ice-candidate", ({ to, candidate }) => {
-    io.to(to).emit("ice-candidate", { candidate });
+    socket.to(to).emit("ice-candidate", { candidate });
   });
 
-  // Camera toggle
-  socket.on("camera-toggle", ({ to, on, from }) => {
-    io.to(to).emit("camera-toggle", { on, from });
-  });
-
-  // End call
-  socket.on("end-call", ({ to }) => {
-    console.log(`❌ Call ended by ${socket.id}`);
-    io.to(to).emit("call-ended");
-  });
-
-  // Text message handling
   socket.on("text-message", async ({ room, message, sender }) => {
-    console.log("💬 text-message received:", { room, message, sender });
-
     try {
-      const result = await pool.query(
-        "INSERT INTO messages (room_id, sender, content) VALUES ($1, $2, $3) RETURNING *",
+      await pool.query(
+        "INSERT INTO messages (room_id, sender, content) VALUES ($1, $2, $3)",
         [room, sender, message]
       );
-      console.log("✅ Message saved:", result.rows[0]);
-    } catch (err) {
-      console.error("❌ DB insert error:", err.message);
+      console.log("Message stored in DB");
+    } catch (error) {
+      console.error("DB insert failed:", error.message);
     }
 
-    socket.to(room).emit("text-message", { message, sender });
+    io.in(room).emit("text-message", {
+      message,
+      sender,
+    });
   });
 
-  // On disconnect
+  socket.on("end-call", ({ to }) => {
+    socket.to(to).emit("call-ended");
+  });
+
   socket.on("disconnect", () => {
-    console.log("🔴 User disconnected:", socket.id);
+    console.log("User disconnected:", socket.id);
   });
 });
 

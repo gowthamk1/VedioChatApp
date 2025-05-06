@@ -9,6 +9,7 @@ export const useSocket = () => {
 
 export const SocketProvider = ({ children }) => {
   const socket = useMemo(() => {
+    console.log("Backend URL:", process.env.REACT_APP_BACKEND_URL);
     const socketInstance = io(process.env.REACT_APP_BACKEND_URL, {
       transports: ["websocket"],        
       reconnectionAttempts: 5,           
