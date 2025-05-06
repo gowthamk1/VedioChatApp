@@ -1,94 +1,95 @@
-require("dotenv").config();
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const cors = require("cors");
-const pool = require("./db"); 
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const cors = require('cors');
+const { Server } = require('socket.io');
+const { Pool } = require("pg");
 
 const app = express();
+app.use(cors());
+
 const server = http.createServer(app);
-
-
-const corsOptions = {
-  origin: process.env.CLIENT_URL || "https://vediochatapplication.netlify.app/", 
-  methods: ["GET", "POST"],
-  credentials: true, // Optional, based on your needs
-};
-
-app.use(cors(corsOptions));
-
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "https://vediochatapplication.netlify.app/", 
-    methods: ["GET", "POST"],
+    origin: '*',
+    methods: ['GET', 'POST'],
   },
 });
 
-io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+// PostgreSQL connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
 
+io.on("connection", (socket) => {
+  console.log("🟢 User connected:", socket.id);
+
+  // Join room
   socket.on("room:join", ({ email, room }) => {
     socket.join(room);
-    console.log(`${email} joined room ${room}`);
-
-    const clients = Array.from(io.sockets.adapter.rooms.get(room) || []);
-    const otherClient = clients.find((id) => id !== socket.id);
-
-    if (otherClient) {
-      socket.to(otherClient).emit("user:joined", { id: socket.id });
-      socket.emit("user:joined", { id: otherClient });
-    }
-
-    socket.emit("room:join", { email, room });
+    console.log(`👤 ${email} joined room: ${room}`);
+    socket.to(room).emit("user:joined", { id: socket.id });
   });
 
+  // Call events
   socket.on("user:call", ({ to, offer }) => {
-    socket.to(to).emit("incomming:call", { from: socket.id, offer });
+    console.log(`📞 Call offer from ${socket.id} to ${to}`);
+    io.to(to).emit("incomming:call", { from: socket.id, offer });
   });
 
   socket.on("call:accepted", ({ to, ans }) => {
-    socket.to(to).emit("call:accepted", { ans });
+    io.to(to).emit("call:accepted", { ans });
   });
 
+  // Negotiation
   socket.on("peer:nego:needed", ({ to, offer }) => {
-    socket.to(to).emit("peer:nego:needed", { from: socket.id, offer });
+    io.to(to).emit("peer:nego:needed", { from: socket.id, offer });
   });
 
   socket.on("peer:nego:done", ({ to, ans }) => {
-    socket.to(to).emit("peer:nego:final", { ans });
+    io.to(to).emit("peer:nego:final", { ans });
   });
 
+  // ICE candidate
   socket.on("ice-candidate", ({ to, candidate }) => {
-    socket.to(to).emit("ice-candidate", { candidate });
+    io.to(to).emit("ice-candidate", { candidate });
   });
 
+  // Camera toggle
+  socket.on("camera-toggle", ({ to, on, from }) => {
+    io.to(to).emit("camera-toggle", { on, from });
+  });
+
+  // End call
+  socket.on("end-call", ({ to }) => {
+    console.log(`❌ Call ended by ${socket.id}`);
+    io.to(to).emit("call-ended");
+  });
+
+  // Text message handling
   socket.on("text-message", async ({ room, message, sender }) => {
+    console.log("💬 text-message received:", { room, message, sender });
+
     try {
-      await pool.query(
-        "INSERT INTO messages (room_id, sender, content) VALUES ($1, $2, $3)",
+      const result = await pool.query(
+        "INSERT INTO messages (room_id, sender, content) VALUES ($1, $2, $3) RETURNING *",
         [room, sender, message]
       );
-      console.log("Message stored in DB");
-    } catch (error) {
-      console.error("DB insert failed:", error.message);
+      console.log("✅ Message saved:", result.rows[0]);
+    } catch (err) {
+      console.error("❌ DB insert error:", err.message);
     }
 
-    socket.to(room).emit("text-message", {
-      message,
-      sender,
-    });
+    socket.to(room).emit("text-message", { message, sender });
   });
 
-  socket.on("end-call", ({ to }) => {
-    socket.to(to).emit("call-ended");
-  });
-
+  // On disconnect
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+    console.log("🔴 User disconnected:", socket.id);
   });
 });
 
-// Use the port from the environment variable in production
 const PORT = process.env.PORT || 8000;
 server.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
