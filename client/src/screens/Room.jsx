@@ -96,6 +96,7 @@ const RoomPage = () => {
 
   const handleSendMessage = () => {
     if (newMessage.trim()) {
+      console.log("📤 Emitting text-message:", newMessage);
       socket.emit("text-message", {
         room: roomId,
         message: newMessage,
