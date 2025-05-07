@@ -27,20 +27,20 @@ const LobbyScreen = () => {
   const handleJoinRoom = useCallback(
     (data) => {
       const { room } = data;
-      setLoading(false); // Stop loading
+      setLoading(false); 
       navigate(`/room/${room}`);
     },
     [navigate]
   );
 
   const handleJoinRoomError = useCallback(() => {
-    setLoading(false); // Stop loading
+    setLoading(false); 
     setError("Failed to join the room. Please try again.");
   }, []);
 
   useEffect(() => {
     socket.on("room:join", handleJoinRoom);
-    socket.on("room:join:error", handleJoinRoomError); // Listen for error events
+    socket.on("room:join:error", handleJoinRoomError); 
     return () => {
       socket.off("room:join", handleJoinRoom);
       socket.off("room:join:error", handleJoinRoomError);
