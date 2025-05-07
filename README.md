@@ -6,6 +6,13 @@ VedioChatApp is a real-time video chat application built using WebRTC for peer-t
 
 * **Live Website:** [VedioChatApp](https://vediochatapplication.netlify.app/)
 
+### 📝 Live Demo Instructions
+
+1. **Enter your Email and Room ID:** Both you and the remote user must enter the same Room ID to connect.
+2. **Initiate Call:** Once connected, you will see a call option.
+3. **Accept or Reject Call:** The remote user will receive an option to accept or reject the incoming call.
+4. **End Call:** After the conversation, you can end the call and return to the home screen.
+
 ## 🚀 Features
 
 * Real-time video and audio communication using WebRTC.
